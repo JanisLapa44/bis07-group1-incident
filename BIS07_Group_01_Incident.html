@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BIS07 Group 1 Incident dashboard</title>
+<style>
+/* ===== Base styles ===== */
+:root{--ink:#1a1d21;--muted:#4a5260;--line:#c9ced6;--bg:#f6f7f9;--card:#fff;--accent:#1f4fa3;--warn:#8a4b00;--warnbg:#fff4e0;--focus:#c2410c}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5;font-size:16px}
+header.top{background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;position:sticky;top:0;z-index:5}
+@media (max-width:700px){header.top{position:static}}
+.printonly{display:none}
+header.top h1{font-size:1.15rem;margin:0 0 8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.controls fieldset{border:0;margin:0;padding:0;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.controls legend{float:left;margin-right:6px;font-size:.85rem;color:var(--muted);padding:0}
+button,select{font:inherit;font-size:.9rem;padding:6px 10px;border:1px solid var(--accent);background:#fff;color:var(--accent);border-radius:6px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:#fff}
+button[aria-pressed="true"]::before{content:"\2713 "}
+label{font-size:.85rem;color:var(--muted)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+main{max-width:1200px;margin:0 auto;padding:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:0 0 16px}
+h2{font-size:1.1rem;margin:0 0 10px}
+h3{font-size:1rem;margin:12px 0 6px}
+.notice{background:var(--warnbg);border:2px solid var(--warn);color:#4a2a00;padding:8px 12px;border-radius:6px;font-weight:600}
+.small{font-size:.85rem;color:var(--muted)}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:560px}
+th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:#eef1f5}
+code,.mono{font-family:ui-monospace,Consolas,monospace;font-size:.85em;word-break:break-word}
+.tag{display:inline-block;border:1px solid var(--muted);border-radius:4px;padding:0 5px;font-size:.78rem;font-weight:600;white-space:nowrap}
+.tag.b{border-style:dashed}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:700px){.grid2{grid-template-columns:1fr}}
+.empty{padding:10px;border:1px dashed var(--muted);border-radius:6px;font-weight:600}
+/* timeline svg */
+.tl-wrap{overflow-x:auto}
+.tl-wrap svg{min-width:640px;width:100%;height:auto}
+/* architecture */
+.arch{display:flex;flex-direction:column;gap:6px}
+.layer{display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:6px}
+.layer .lname{font-size:.8rem;color:var(--muted);width:150px;flex:none}
+@media (max-width:600px){.layer .lname{width:100%}}
+.layer button{font-size:.85rem}
+.layer button.assumed{border-style:dashed}
+.arrow{text-align:center;color:var(--muted);font-size:.85rem}
+.detail{border-left:4px solid var(--accent);padding:6px 10px;background:#f1f5fb;margin-top:8px}
+/* matrix */
+td.sup{font-weight:600}
+td.ch{font-style:italic}
+.check{display:flex;gap:8px;align-items:flex-start}
+.check input{width:20px;height:20px;margin-top:2px}
+.inshort{font-size:1.05rem;background:#f1f5fb;border-left:4px solid var(--accent);padding:10px 12px;margin:0 0 12px}
+.cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.card h3{margin:0 0 4px}
+.card dt,.gloss dt{font-weight:600;font-size:.85rem;color:var(--muted);margin-top:8px}
+.card dd,.gloss dd{margin:0}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px;margin:0}
+blockquote{margin:0;padding:8px 12px;border-left:4px solid var(--accent);background:#f1f5fb}
+/* ===== Print ===== */
+@media print{
+ header.top{position:static}
+ .controls,.noprint,#archdetail,.layer button,.check{display:none!important}
+ .printonly{display:block}
+ body{background:#fff}
+ section{break-inside:avoid;border:0;padding:0 0 10px}
+ .scroll,.tl-wrap{overflow:visible}
+ table{min-width:0}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1 id="title"></h1>
+  <div class="controls">
+    <fieldset>
+      <legend id="lg-lang"></legend>
+      <button type="button" data-lang="lv" aria-pressed="false">LV</button>
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+    </fieldset>
+    <fieldset>
+      <legend id="lg-ver"></legend>
+      <button type="button" data-ver="A" aria-pressed="false" id="btn-a"></button>
+      <button type="button" data-ver="AB" aria-pressed="true" id="btn-ab"></button>
+    </fieldset>
+    <div>
+      <label for="sysfilter" id="lb-sys"></label>
+      <select id="sysfilter"></select>
+    </div>
+    <button type="button" id="btn-reset"></button>
+    <button type="button" id="btn-print"></button>
+  </div>
+  <p class="small" id="statenote" style="margin:6px 0 0"></p>
+  <p class="small" id="live" role="status" aria-live="polite" style="margin:2px 0 0"></p>
+</header>
+<main id="main"></main>
+
+<script>
+/* =====================================================================
+   DATA: team-verified content only. A records are immutable.
+   Each text field has en and lv versions. IDs and raw fields are not translated.
+   ===================================================================== */
+const SYSTEMS = {
+  IAM:{en:"IAM",lv:"IAM"}, Payee:{en:"Payee service",lv:"Saņēmēju serviss"},
+  Payments:{en:"Payments",lv:"Maksājumi"}, Fraud:{en:"Fraud service",lv:"Krāpšanas novēršanas serviss"},
+  CRM:{en:"CRM",lv:"CRM"}, SOC:{en:"SOC case",lv:"SOC lieta"}, Core:{en:"Core banking",lv:"Pamatbankas sistēma"}
+};
+const NS = {en:"not supplied", lv:"nav sniegts"};
+const SRC_LV = {"Payee service":"Saņēmēju serviss","Payments":"Maksājumi","Fraud service":"Krāpšanas novēršanas serviss","SOC case":"SOC lieta","CRM follow-up":"CRM papildinformācija","IAM detail":"IAM detalizēts ieraksts","Core extract":"Pamatbankas izraksts","IAM session registry":"IAM sesiju reģistrs"};
+
+const EVENTS = [
+ {id:"G1-01",set:"A",recv:null,evt:"09:00",sys:"IAM",src:"IAM",raw:"LOGIN_REQUEST; customer=C101; session=S11; device=Dnew; new_device=true",
+  en:"Login request for C101 from a device the bank had not seen before.",lv:"C101 pieteikšanās pieprasījums no ierīces, ko banka iepriekš nebija redzējusi."},
+ {id:"G1-02",set:"A",recv:null,evt:"09:01",sys:"IAM",src:"IAM",raw:"AUTH_RESULT; session=S11; result=success; factor_method=unknown",
+  en:"Authentication for S11 succeeded. The factor used is unknown.",lv:"S11 autentifikācija bija sekmīga. Izmantotais faktors nav zināms."},
+ {id:"G1-03",set:"A",recv:null,evt:"09:02",sys:"Payee",src:"Payee service",raw:"PAYEE_CREATED; session=S11; beneficiary=B71",
+  en:"New beneficiary B71 created in session S11.",lv:"Sesijā S11 izveidots jauns saņēmējs B71."},
+ {id:"G1-04",set:"A",recv:null,evt:"09:03",sys:"Payments",src:"Payments",raw:"PAYMENT_REQUEST; payment=P101; amount=2400 EUR; beneficiary=B71",
+  en:"Payment P101, EUR 2,400 to B71, requested. No session ID in this record.",lv:"Pieprasīts maksājums P101, 2400 EUR saņēmējam B71. Ierakstā nav sesijas ID."},
+ {id:"G1-05",set:"A",recv:null,evt:"09:03",sys:"Fraud",src:"Fraud service",raw:"RISK_ALERT; payment=P101; signals=new_device,new_beneficiary",
+  en:"Risk alert on P101 (new device, new beneficiary). No action recorded.",lv:"Riska brīdinājums par P101 (jauna ierīce, jauns saņēmējs). Darbība nav reģistrēta."},
+ {id:"G1-06",set:"A",recv:null,evt:"09:04",sys:"Payments",src:"Payments",raw:"PAYMENT_STATUS; payment=P101; status=accepted; settlement=unknown",
+  en:"P101 accepted. Settlement unknown. Accepted is not settled.",lv:"P101 pieņemts. Norēķins nav zināms. Pieņemts nenozīmē norēķināts."},
+ {id:"G1-07",set:"A",recv:null,evt:"09:08",sys:"CRM",src:"CRM",raw:"CUSTOMER_REPORT; customer=C101; denies_beneficiary_and_payment=true",
+  en:"Customer denies creating B71 and making P101 (a claim).",lv:"Klients noliedz B71 izveidi un P101 veikšanu (apgalvojums)."},
+ {id:"G1-08",set:"A",recv:null,evt:"09:09",sys:"SOC",src:"SOC case",raw:"CASE_OPENED; case=I101; payment=P101",
+  en:"SOC case I101 opened for P101.",lv:"Atvērta SOC lieta I101 par P101."},
+ {id:"G1-B01",set:"B",recv:"09:12",evt:{en:"08:55 (reported call)",lv:"08:55 (ziņotais zvans)"},sys:"CRM",src:"CRM follow-up",raw:null,
+  en:"The customer reports an 08:55 call from someone claiming to be a bank employee. The call content is not independently verified.",
+  lv:"Klients ziņo par zvanu 08:55 no personas, kas uzdevās par bankas darbinieku. Nav neatkarīga zvana satura apstiprinājuma.",plot:"09:12"},
+ {id:"G1-B02",set:"B",recv:"09:13",evt:{en:"09:01 (the G1-02 authentication)",lv:"09:01 (G1-02 autentifikācija)"},sys:"IAM",src:"IAM detail",raw:null,
+  en:"A correlated record confirms successful authentication for S11 in G1-02; the method and approved screen content remain unavailable in the extract.",
+  lv:"G1-02 korelācijas ieraksts apstiprina S11 autentifikācijas sekmīgu pabeigšanu; autentifikācijas metode un apstiprinātā ekrāna saturs izrakstā joprojām nav pieejams.",plot:"09:13"},
+ {id:"G1-B03",set:"B",recv:"09:14",evt:null,sys:"Core",src:"Core extract",raw:null,
+  en:"P101 is linked to one EUR 2,400 debit posting J101. The extract does not contain final external settlement status.",
+  lv:"P101 ir saistīts ar vienu 2400 EUR debeta grāmatojumu J101. Izrakstā nav ārējā norēķina gala statusa.",plot:"09:14"},
+ {id:"G1-B04",set:"B",recv:"09:15",evt:{en:"state at time of extract (time not supplied)",lv:"stāvoklis izraksta brīdī (laiks nav sniegts)"},sys:"IAM",src:"IAM session registry",raw:null,
+  en:"S11 remains active. Device ownership has not been independently verified.",
+  lv:"S11 joprojām ir aktīva. Ierīces īpašnieks nav neatkarīgi pārbaudīts.",plot:"09:15"}
+];
+
+/* Hypothesis-evidence matrix: s = supports, w = weak support, c = challenges, n = does not distinguish */
+const MATRIX = {
+ "G1-01":["w","n"],"G1-02":["n","n"],"G1-03":["w","n"],"G1-04":["n","n"],"G1-05":["w","n"],"G1-06":["n","n"],"G1-07":["s","c"],"G1-08":["n","n"],
+ "G1-B01":["n","w"],"G1-B02":["n","n"],"G1-B03":["n","n"],"G1-B04":["n","n"]
+};
+const MLABEL = {
+ s:{en:"Supports",lv:"Atbalsta",sym:"++"}, w:{en:"Slightly supports",lv:"Nedaudz atbalsta",sym:"+"},
+ c:{en:"Speaks against",lv:"Runā pretī",sym:"−"}, n:{en:"Doesn't help decide",lv:"Nepalīdz izšķirt",sym:"="}
+};
+const MNOTE = {
+ "G1-07":{en:"Denial is a claim, not proof.",lv:"Noliegums ir apgalvojums, nevis pierādījums."},
+ "G1-B01":{en:"A reported call from a claimed bank employee before login fits a coached customer (H2), but the caller could also have captured codes for a third party (H1). Unverified claim.",
+          lv:"Ziņotais zvans no personas, kas uzdevās par bankas darbinieku, pirms pieteikšanās atbilst klientam, kuru vada krāpnieks (H2), taču zvanītājs varēja arī iegūt kodus trešajai personai (H1). Nepārbaudīts apgalvojums."},
+ "G1-B04":{en:"Does not show who holds the session, but is an immediate risk.",lv:"Neparāda, kurš kontrolē sesiju, taču ir tūlītējs risks."}
+};
+
+/* Team-authored analysis versions (not generated conclusions) */
+const ANALYSIS = {
+ A:{
+  confirmed:[
+   {en:"Login from new device Dnew succeeded in session S11; the factor is unknown (G1-01, G1-02).",lv:"Pieteikšanās no jaunas ierīces Dnew sesijā S11 bija sekmīga; faktors nav zināms (G1-01, G1-02)."},
+   {en:"Beneficiary B71 was created in S11, then payment P101 of EUR 2,400 to B71 was requested (G1-03, G1-04).",lv:"Sesijā S11 izveidots saņēmējs B71, pēc tam pieprasīts maksājums P101 par 2400 EUR saņēmējam B71 (G1-03, G1-04)."},
+   {en:"A risk alert was raised, yet P101 was accepted; settlement is unknown (G1-05, G1-06). The customer denies both actions and case I101 is open (G1-07, G1-08).",lv:"Tika izveidots riska brīdinājums, tomēr P101 pieņemts; norēķins nav zināms (G1-05, G1-06). Klients noliedz abas darbības, atvērta lieta I101 (G1-07, G1-08)."}
+  ],
+  hyp:[
+   {en:"H1 Account takeover: a third party controlled S11 from Dnew.",lv:"H1 Konta pārņemšana: S11 no Dnew kontrolēja trešā persona."},
+   {en:"H2 Legitimate session: the customer used S11 but was manipulated or mistaken.",lv:"H2 Leģitīma sesija: S11 izmantoja klients, bet tika manipulēts vai kļūdījās."}
+  ],
+  unknown:[
+   {en:"Who controlled Dnew and S11.",lv:"Kurš kontrolēja Dnew un S11."},
+   {en:"Which factor was used and what the customer saw.",lv:"Kurš faktors tika izmantots un ko klients redzēja."},
+   {en:"Whether P101 had its own approval step showing amount and payee.",lv:"Vai P101 bija atsevišķs apstiprinājuma solis ar summu un saņēmēju."},
+   {en:"Whether P101 belongs to S11 (G1-04 has no session ID).",lv:"Vai P101 pieder S11 (G1-04 nav sesijas ID)."},
+   {en:"Settlement of P101 and what was done about the alert.",lv:"P101 norēķins un kas tika darīts saistībā ar brīdinājumu."}
+  ],
+  status:{en:"Case I101 open. Neither hypothesis established.",lv:"Lieta I101 atvērta. Neviena hipotēze nav apstiprināta."}
+ },
+ AB:{
+  confirmed:[
+   {en:"All A facts remain unchanged (G1-01 to G1-08).",lv:"Visi A fakti paliek nemainīti (G1-01 līdz G1-08)."},
+   {en:"The customer reports an 08:55 call from a claimed bank employee, 5 minutes before the login; unverified (G1-B01).",lv:"Klients ziņo par zvanu 08:55 no personas, kas uzdevās par bankas darbinieku, 5 minūtes pirms pieteikšanās; nepārbaudīts (G1-B01)."},
+   {en:"Authentication success for S11 is confirmed; method and approved screen content are still unavailable (G1-B02).",lv:"S11 autentifikācijas sekmīgums apstiprināts; metode un apstiprinātā ekrāna saturs joprojām nav pieejami (G1-B02)."},
+   {en:"P101 is linked to debit posting J101 of EUR 2,400; external settlement is still unknown (G1-B03).",lv:"P101 saistīts ar 2400 EUR debeta grāmatojumu J101; ārējais norēķins joprojām nav zināms (G1-B03)."},
+   {en:"S11 is still active; device ownership is not verified (G1-B04).",lv:"S11 joprojām ir aktīva; ierīces īpašnieks nav pārbaudīts (G1-B04)."}
+  ],
+  hyp:[
+   {en:"H1 (revised): a third party controlled S11 on Dnew, possibly using codes or details obtained in the 08:55 call.",lv:"H1 (pārskatīta): S11 ierīcē Dnew kontrolēja trešā persona, iespējams, izmantojot 08:55 zvanā iegūtus kodus vai datus."},
+   {en:"H2 (revised): the customer operated S11 themselves while following the caller's instructions.",lv:"H2 (pārskatīta): klients pats izmantoja S11, sekojot zvanītāja norādēm."}
+  ],
+  unknown:[
+   {en:"Who operated Dnew during S11.",lv:"Kurš lietoja Dnew sesijas S11 laikā."},
+   {en:"Whether the customer shared codes, approved a prompt or installed an app during the call.",lv:"Vai klients zvana laikā atklāja kodus, apstiprināja pieprasījumu vai instalēja lietotni."},
+   {en:"Authentication method, the content of the approved screen, and whether P101 had its own approval step.",lv:"Autentifikācijas metode, apstiprinātā ekrāna saturs un vai P101 bija atsevišķs apstiprinājuma solis."},
+   {en:"External settlement status of P101/J101 and whether a recall is possible.",lv:"P101/J101 ārējā norēķina statuss un vai atsaukšana ir iespējama."},
+   {en:"Whether P101 belongs to S11 (still no session ID on G1-04).",lv:"Vai P101 pieder S11 (G1-04 joprojām nav sesijas ID)."}
+  ],
+  status:{en:"Case open. Active session S11 is the immediate risk. Decisions D1 to D3 are proposed (design only, not executed).",lv:"Lieta atvērta. Aktīvā sesija S11 ir tūlītējais risks. Lēmumi D1 līdz D3 ir ierosināti (tikai projekts, nav izpildīti)."},
+  revision:{en:"Revision 1 (after B): both hypotheses reworded to include the 08:55 call. H2 is somewhat more plausible than in version A because of G1-B01, but neither is established and G1-B01 is an unverified claim. No percentages are given. Revised decisions: ending S11 becomes urgent (G1-B04); the settlement check becomes a payment-status investigation with no promise of recovery (G1-B03); the customer interview focuses on the call (G1-B01).",
+   lv:"1. pārskatīšana (pēc B): abas hipotēzes pārformulētas, iekļaujot 08:55 zvanu. H2 ir nedaudz ticamāka nekā A versijā G1-B01 dēļ, taču neviena nav apstiprināta, un G1-B01 ir nepārbaudīts apgalvojums. Procenti netiek norādīti. Pārskatītie lēmumi: S11 izbeigšana kļūst steidzama (G1-B04); norēķina pārbaude kļūst par maksājuma statusa izmeklēšanu bez solījuma atgūt līdzekļus (G1-B03); intervija ar klientu koncentrējas uz zvanu (G1-B01)."}
+ }
+};
+
+const HYP = {
+ A:[
+  {h:"H1",sup:{en:"New device (G1-01); new payee and payment requested 2 to 3 minutes after login (G1-01, G1-03, G1-04); alert on these signals (G1-05); customer denial (G1-07).",lv:"Jauna ierīce (G1-01); jauns saņēmējs un maksājums 2 līdz 3 minūtes pēc pieteikšanās (G1-01, G1-03, G1-04); brīdinājums par šiem signāliem (G1-05); klienta noliegums (G1-07)."},
+   con:{en:"Factor unknown (G1-02); a new device can be the customer's new phone; the denial is a claim.",lv:"Faktors nav zināms (G1-02); jauna ierīce var būt klienta jaunais tālrunis; noliegums ir apgalvojums."},
+   gap:{en:"Device history, IP/location, factor method.",lv:"Ierīces vēsture, IP/atrašanās vieta, faktora metode."},
+   conf:{en:"Open, not established.",lv:"Atvērta, nav apstiprināta."}},
+  {h:"H2",sup:{en:"Authentication succeeded (G1-02); nothing excludes the customer's own involvement.",lv:"Autentifikācija bija sekmīga (G1-02); nekas neizslēdz paša klienta iesaisti."},
+   con:{en:"The customer explicitly denies creating the payee (G1-07); no evidence of coaching.",lv:"Klients skaidri noliedz saņēmēja izveidi (G1-07); nav pierādījumu par vadīšanu."},
+   gap:{en:"Customer interview, contact records.",lv:"Intervija ar klientu, saziņas ieraksti."},
+   conf:{en:"Open, not established.",lv:"Atvērta, nav apstiprināta."}}
+ ],
+ AB:[
+  {h:"H1",sup:{en:"As in A, plus: the 08:55 caller (G1-B01) could have obtained codes or credentials for use on Dnew.",lv:"Kā A versijā, kā arī: 08:55 zvanītājs (G1-B01) varēja iegūt kodus vai piekļuves datus izmantošanai Dnew ierīcē."},
+   con:{en:"Method still unknown (G1-B02); G1-B01 is unverified; device ownership unverified (G1-B04).",lv:"Metode joprojām nav zināma (G1-B02); G1-B01 nav pārbaudīts; ierīces īpašnieks nav pārbaudīts (G1-B04)."},
+   gap:{en:"Who held Dnew; whether codes were shared in the call.",lv:"Kuram piederēja Dnew; vai zvanā tika atklāti kodi."},
+   conf:{en:"Open, unchanged from A.",lv:"Atvērta, nemainīta salīdzinājumā ar A."}},
+  {h:"H2",sup:{en:"A claimed bank call 5 minutes before login (G1-B01) fits a customer coached through the payment.",lv:"Zvans no personas, kas uzdevās par bankas darbinieku, 5 minūtes pirms pieteikšanās (G1-B01) atbilst klientam, kuru krāpnieks vada maksājuma veikšanā."},
+   con:{en:"The customer still denies creating the payee (G1-07); call content unverified (G1-B01).",lv:"Klients joprojām noliedz saņēmēja izveidi (G1-07); zvana saturs nav pārbaudīts (G1-B01)."},
+   gap:{en:"Customer interview on the call; approved screen content (G1-B02).",lv:"Intervija ar klientu par zvanu; apstiprinātā ekrāna saturs (G1-B02)."},
+   conf:{en:"Somewhat more plausible than in A, not established.",lv:"Nedaudz ticamāka nekā A versijā, nav apstiprināta."}}
+ ]
+};
+
+const AUTHORITY = [
+ {item:{en:"Authentication result and method",lv:"Autentifikācijas rezultāts un metode"},sys:"IAM",copies:{en:"Second IAM record (G1-B02, still IAM). Other copies: not supplied.",lv:"Otrs IAM ieraksts (G1-B02, joprojām IAM). Citas kopijas: nav sniegtas."},copiesA:{en:"Not supplied.",lv:"Nav sniegts."},unc:{en:"Method and approved screen content not available.",lv:"Metode un apstiprinātā ekrāna saturs nav pieejami."}},
+ {onlyB:1,item:{en:"Session state (S11)",lv:"Sesijas stāvoklis (S11)"},sys:{en:"IAM session registry",lv:"IAM sesiju reģistrs"},copies:{en:"SOC case (group assumption; not shown in the evidence).",lv:"SOC lieta (grupas pieņēmums; pierādījumos nav redzams)."},unc:{en:"State at 09:15 may have changed; device ownership unverified.",lv:"Stāvoklis 09:15 var būt mainījies; ierīces īpašnieks nav pārbaudīts."}},
+ {item:{en:"Beneficiary B71 creation",lv:"Saņēmēja B71 izveide"},sys:{en:"Payee service",lv:"Saņēmēju serviss"},copies:{en:"Fraud service uses a new_beneficiary signal (G1-05) but does not name B71.",lv:"Krāpšanas novēršanas serviss izmanto new_beneficiary signālu (G1-05), bet nenosauc B71."},unc:{en:"Who performed it.",lv:"Kurš to veica."}},
+ {item:{en:"Payment order and status (P101)",lv:"Maksājuma rīkojums un statuss (P101)"},sys:{en:"Payments",lv:"Maksājumi"},copies:{en:"Fraud service and SOC case reference P101 (G1-05, G1-08); they are references, not copies of status.",lv:"Krāpšanas novēršanas serviss un SOC lieta atsaucas uz P101 (G1-05, G1-08); tās ir atsauces, nevis statusa kopijas."},unc:{en:"No session ID; accepted is not settled.",lv:"Nav sesijas ID; pieņemts nenozīmē norēķināts."}},
+ {onlyB:1,item:{en:"Account debit posting (J101)",lv:"Konta debeta grāmatojums (J101)"},sys:{en:"Core banking ledger",lv:"Pamatbankas virsgrāmata"},copies:{en:"Core extract (G1-B03)",lv:"Pamatbankas izraksts (G1-B03)"},unc:{en:"An extract, not the ledger itself; posting is not external settlement.",lv:"Izraksts, nevis pati virsgrāmata; grāmatojums nav ārējais norēķins."}},
+ {item:{en:"External settlement",lv:"Ārējais norēķins"},sys:{en:"External clearing/settlement or beneficiary's bank",lv:"Ārējā klīringa/norēķinu sistēma vai saņēmēja banka"},copies:{en:"None",lv:"Nav"},unc:{en:"Not supplied.",lv:"Nav sniegts."}},
+ {item:{en:"Customer statements (denial, call)",lv:"Klienta paziņojumi (noliegums, zvans)"},itemA:{en:"Customer statement (denial)",lv:"Klienta paziņojums (noliegums)"},sys:"CRM",copies:{en:"SOC case (group assumption; not shown in the evidence).",lv:"SOC lieta (grupas pieņēmums; pierādījumos nav redzams)."},unc:{en:"Claims, not verified facts.",lv:"Apgalvojumi, nevis pārbaudīti fakti."}},
+ {item:{en:"Risk alert",lv:"Riska brīdinājums"},sys:{en:"Fraud service",lv:"Krāpšanas novēršanas serviss"},copies:{en:"SOC case (group assumption; not shown in the evidence).",lv:"SOC lieta (grupas pieņēmums; pierādījumos nav redzams)."},unc:{en:"Action taken on the alert not recorded.",lv:"Pēc brīdinājuma veiktā darbība nav reģistrēta."}}
+];
+
+const ARCH = [
+ {layer:{en:"Channels",lv:"Kanāli"},items:[
+  {k:"dev",name:{en:"Device Dnew (online banking)",lv:"Ierīce Dnew (internetbanka)"},role:{en:"Where session S11 was used.",lv:"Kur tika izmantota sesija S11."},auth:{en:"Not authoritative; ownership unverified.",lv:"Nav autoritatīvs; īpašnieks nav pārbaudīts."},ev:"G1-01, G1-B04",evA:"G1-01"},
+  {k:"call",onlyB:1,name:{en:"Phone call 08:55 (outside the bank)",lv:"Telefona zvans 08:55 (ārpus bankas)"},role:{en:"Reported impersonation call.",lv:"Ziņotais zvans, uzdodoties par banku."},auth:{en:"No bank system holds it; customer claim only.",lv:"Neviena bankas sistēma to neglabā; tikai klienta apgalvojums."},ev:"G1-B01"}]},
+ {layer:{en:"API / integration",lv:"API / integrācija"},items:[
+  {k:"api",assumed:true,name:{en:"API gateway (assumed)",lv:"API vārteja (pieņēmums)"},role:{en:"Connects channels to applications. Group assumption, not in the evidence.",lv:"Savieno kanālus ar lietotnēm. Grupas pieņēmums, nav pierādījumos."},auth:{en:"Not supplied.",lv:"Nav sniegts."},ev:{en:"not supplied",lv:"nav sniegts"}}]},
+ {layer:{en:"Applications",lv:"Lietotnes"},items:[
+  {k:"iam",name:{en:"IAM",lv:"IAM"},role:{en:"Login, authentication and sessions.",lv:"Pieteikšanās, autentifikācija un sesijas."},auth:{en:"Authoritative for authentication results and session state.",lv:"Autoritatīvs autentifikācijas rezultātiem un sesiju stāvoklim."},ev:"G1-01, G1-02, G1-B02, G1-B04",evA:"G1-01, G1-02"},
+  {k:"payee",name:{en:"Payee service",lv:"Saņēmēju serviss"},role:{en:"Creates and stores beneficiaries.",lv:"Izveido un glabā saņēmējus."},auth:{en:"Authoritative for beneficiary records.",lv:"Autoritatīvs saņēmēju ierakstiem."},ev:"G1-03"},
+  {k:"pay",name:{en:"Payments",lv:"Maksājumi"},role:{en:"Receives payment orders and sets their status.",lv:"Pieņem maksājumu rīkojumus un nosaka to statusu."},auth:{en:"Authoritative for payment order status (not settlement).",lv:"Autoritatīvs maksājuma rīkojuma statusam (ne norēķinam)."},ev:"G1-04, G1-06"},
+  {k:"fraud",name:{en:"Fraud service",lv:"Krāpšanas novēršanas serviss"},role:{en:"Scores risk and raises alerts.",lv:"Novērtē risku un izveido brīdinājumus."},auth:{en:"Authoritative for alerts, not for decisions taken.",lv:"Autoritatīvs brīdinājumiem, ne pieņemtajiem lēmumiem."},ev:"G1-05"}]},
+ {layer:{en:"Core",lv:"Pamatsistēma"},items:[
+  {k:"core",onlyB:1,name:{en:"Core banking ledger",lv:"Pamatbankas virsgrāmata"},role:{en:"Books debits and credits on accounts.",lv:"Grāmato debetus un kredītus kontos."},auth:{en:"Authoritative for postings (J101).",lv:"Autoritatīvs grāmatojumiem (J101)."},ev:"G1-B03"}]},
+ {layer:{en:"Oversight and partners",lv:"Uzraudzība un partneri"},items:[
+  {k:"soc",name:{en:"SOC case system",lv:"SOC lietu sistēma"},role:{en:"Investigation case management. A SIEM is not shown in the evidence.",lv:"Izmeklēšanas lietu pārvaldība. SIEM pierādījumos nav redzams."},auth:{en:"Authoritative for the case record (I101).",lv:"Autoritatīvs lietas ierakstam (I101)."},ev:"G1-08"},
+  {k:"crm",name:{en:"CRM",lv:"CRM"},role:{en:"Customer contacts and reports.",lv:"Saziņa ar klientiem un ziņojumi."},auth:{en:"Authoritative for what the customer said, not for whether it is true.",lv:"Autoritatīvs tam, ko teica klients, nevis tam, vai tā ir patiesība."},ev:"G1-07, G1-B01",evA:"G1-07"},
+  {k:"ext",name:{en:"External settlement / beneficiary bank",lv:"Ārējais norēķins / saņēmēja banka"},role:{en:"Moves the money between banks.",lv:"Pārvieto naudu starp bankām."},auth:{en:"Authoritative for final settlement status.",lv:"Autoritatīvs gala norēķina statusam."},ev:{en:"not supplied",lv:"nav sniegts"}}]}
+];
+
+const DECISIONS = [
+ {id:"D1",act:{en:"End session S11; temporarily pause new payees and online payments for C101.",lv:"Izbeigt sesiju S11; uz laiku apturēt jaunu saņēmēju un tiešsaistes maksājumu veikšanu klientam C101."},
+  why:"G1-B04, G1-03, G1-04; Lin et al. 2022",
+  own:{en:"IAM operations at SOC request. Scope: S11, Dnew, C101 online payments only (not card or branch access).",lv:"IAM operācijas pēc SOC pieprasījuma. Apjoms: tikai S11, Dnew un C101 tiešsaistes maksājumi (ne karte vai filiāle)."},
+  evd:{en:"Preserve the S11 session record, device data and IAM logs before termination. Side effect: if Dnew is the customer's own device, they temporarily lose online access.",lv:"Pirms izbeigšanas saglabāt S11 sesijas ierakstu, ierīces datus un IAM žurnālus. Blakusefekts: ja Dnew ir klienta ierīce, klients uz laiku zaudē piekļuvi."},
+  rel:{en:"R1 passed; approved by fraud team lead.",lv:"R1 izpildīts; apstiprina krāpšanas komandas vadītājs."}},
+ {id:"D2",act:{en:"Request a payment-status investigation and recall enquiry for P101/J101. Do not change the ledger.",lv:"Pieprasīt P101/J101 maksājuma statusa izmeklēšanu un atsaukšanas iespēju noskaidrošanu. Nemainīt virsgrāmatu."},
+  why:"G1-06, G1-B03; Braithwaite 2024",
+  own:{en:"Payments operations. Scope: P101, J101, B71.",lv:"Maksājumu operācijas. Apjoms: P101, J101, B71."},
+  evd:{en:"Preserve P101 status history, J101 posting and the G1-05 alert. Side effect: recovery may be impossible; nothing is promised.",lv:"Saglabāt P101 statusa vēsturi, J101 grāmatojumu un G1-05 brīdinājumu. Blakusefekts: atgūšana var nebūt iespējama; nekas netiek solīts."},
+  rel:{en:"R2 passed; approved by payments operations manager.",lv:"R2 izpildīts; apstiprina maksājumu operāciju vadītājs."}},
+ {id:"D3",act:{en:"Call the customer back on the number on file and record an interview about the 08:55 call. Never ask for passwords or codes.",lv:"Atzvanīt klientam uz bankā reģistrēto numuru un pierakstīt interviju par 08:55 zvanu. Nekad neprasīt paroles vai kodus."},
+  why:"G1-B01, G1-07; Braithwaite 2024",
+  own:{en:"Fraud case handler. Scope: customer C101.",lv:"Krāpšanas lietas apstrādātājs. Apjoms: klients C101."},
+  evd:{en:"Preserve interview notes in CRM linked to I101. Side effect: customer stress; the statement remains a claim.",lv:"Saglabāt intervijas piezīmes CRM, sasaistot ar I101. Blakusefekts: klienta stress; paziņojums paliek apgalvojums."},
+  rel:{en:"Complete when the statement is recorded and linked to I101.",lv:"Pabeigts, kad paziņojums pierakstīts un sasaistīts ar I101."}}
+];
+
+const RECOVERY = [
+ {id:"R1",crit:{en:"Safe customer access: S11 and any other Dnew sessions ended, credentials reset, Dnew not trusted unless the customer confirms ownership via a verified channel.",lv:"Droša klienta piekļuve: S11 un citas Dnew sesijas izbeigtas, piekļuves dati atiestatīti, Dnew netiek uzskatīta par uzticamu, ja vien klients neapstiprina īpašumtiesības pārbaudītā kanālā."},
+  test:{en:"Session registry shows no active session for C101 on Dnew (including S11); audit log shows the credential reset; device trust list shows Dnew untrusted, or a recorded verified-channel confirmation of ownership.",lv:"Sesiju reģistrā nav aktīvu C101 sesiju ierīcē Dnew (ieskaitot S11); audita žurnālā redzama piekļuves datu atiestatīšana; uzticamo ierīču sarakstā Dnew nav uzticama vai ir reģistrēts īpašumtiesību apstiprinājums pārbaudītā kanālā."},
+  ev:{en:"IAM registry and audit log export",lv:"IAM reģistra un audita žurnāla eksports"},
+  who:{en:"IAM operations / fraud team lead",lv:"IAM operācijas / krāpšanas komandas vadītājs"},
+  fail:{en:"Keep the D1 restriction.",lv:"Saglabāt D1 ierobežojumu."}},
+ {id:"R2",crit:{en:"Financial position established: P101 and J101 reconciled across payments system, ledger and external settlement confirmation.",lv:"Finanšu stāvoklis noskaidrots: P101 un J101 saskaņoti starp maksājumu sistēmu, virsgrāmatu un ārējā norēķina apstiprinājumu."},
+  test:{en:"Reconciliation of the three records.",lv:"Triju ierakstu saskaņošana."},
+  ev:{en:"Reconciliation record",lv:"Saskaņošanas ieraksts"},
+  who:{en:"Payments operations / operations manager",lv:"Maksājumu operācijas / operāciju vadītājs"},
+  fail:{en:"No financial correction; case stays open.",lv:"Nekādu finanšu labojumu; lieta paliek atvērta."}},
+ {id:"R3",crit:{en:"No new suspicious activity after access is restored, during an observation period of 14 days (group assumption, not a rule).",lv:"Pēc piekļuves atjaunošanas novērošanas periodā (14 dienas, grupas pieņēmums, nevis noteikums) nav jaunu aizdomīgu darbību."},
+  test:{en:"Daily review of logins, payees and fraud alerts for C101.",lv:"Ikdienas C101 pieteikšanos, saņēmēju un krāpšanas brīdinājumu pārskatīšana."},
+  ev:{en:"Monitoring report",lv:"Uzraudzības pārskats"},
+  who:{en:"SOC analyst / SOC lead",lv:"SOC analītiķis / SOC vadītājs"},
+  fail:{en:"Reinstate the restriction and investigate further.",lv:"Atjaunot ierobežojumu un izmeklēt tālāk."}}
+];
+
+const MESSAGE = {
+ en:"Hello, thank you for reporting this payment. As a precaution, we are ending the active online banking session and pausing new payees and payments while we check what happened. We are investigating the status of the EUR 2,400 payment, but we cannot yet confirm whether it can be recovered. The bank will never ask for your passwords or codes. Please call the number on your card.",
+ lv:"Labdien! Paldies, ka ziņojāt par šo maksājumu. Piesardzības nolūkā mēs izbeidzam aktīvo internetbankas sesiju un uz laiku apturam jaunu saņēmēju pievienošanu un maksājumu veikšanu, kamēr pārbaudām notikušo. Mēs izmeklējam 2400 EUR maksājuma statusu, taču vēl nevaram apstiprināt, vai to būs iespējams atgūt. Banka nekad neprasīs jūsu paroles vai kodus. Lūdzu, zvaniet uz numuru, kas norādīts uz jūsu kartes."
+};
+
+/* Paper titles are kept in the original language */
+const PAPERS = [
+ {ref:"Wiefling, Lo Iacono, Dürmuth 2019",title:"Is This Really You? An Empirical Study on Risk-Based Authentication Applied in the Wild",venue:"IFIP SEC 2019 (Springer)",url:"https://doi.org/10.1007/978-3-030-22312-0_10",
+  depth:{en:"Crossref metadata checked; full text read (arXiv 2003.07622) by AI research assistant; team to confirm.",lv:"Pārbaudīti Crossref metadati; pilnu tekstu (arXiv 2003.07622) lasīja MI pētniecības asistents; komandai jāapstiprina."},
+  lim:{en:"Studied large web services, not banks specifically.",lv:"Pētīti lieli tīmekļa servisi, ne tieši bankas."}},
+ {ref:"Carminati et al. 2015",title:"BankSealer: A decision support system for online banking fraud analysis and investigation",venue:"Computers & Security 53",url:"https://doi.org/10.1016/j.cose.2015.04.002",
+  depth:{en:"Crossref metadata and abstract checked.",lv:"Pārbaudīti Crossref metadati un kopsavilkums."},
+  lim:{en:"Data from one Italian bank; ranking is not proof.",lv:"Dati no vienas Itālijas bankas; reitings nav pierādījums."}},
+ {ref:"Achituve, Kraus, Goldberger 2019",title:"Interpretable Online Banking Fraud Detection Based on Hierarchical Attention Mechanism",venue:"IEEE MLSP 2019",url:"https://doi.org/10.1109/MLSP.2019.8918896",
+  depth:{en:"OpenAlex/Crossref metadata checked; full text read by AI research assistant; team to confirm.",lv:"Pārbaudīti OpenAlex/Crossref metadati; pilnu tekstu lasīja MI pētniecības asistents; komandai jāapstiprina."},
+  lim:{en:"Model tested on one bank's data; patterns can mislead both ways.",lv:"Modelis pārbaudīts vienas bankas datos; modeļi var maldināt abos virzienos."}},
+ {ref:"Lin, Ilia, Solanki, Polakis 2022",title:"Phish in Sheep's Clothing: Exploring the Authentication Pitfalls of Browser Fingerprinting",venue:"USENIX Security 2022",url:"https://www.usenix.org/conference/usenixsecurity22/presentation/lin-xu",
+  depth:{en:"USENIX page checked (no DOI); abstract only.",lv:"Pārbaudīta USENIX lapa (nav DOI); tikai kopsavilkums."},
+  lim:{en:"About web browsers; Dnew type is unknown.",lv:"Par tīmekļa pārlūkiem; Dnew veids nav zināms."}},
+ {ref:"Vastel et al. 2018",title:"FP-STALKER: Tracking Browser Fingerprint Evolutions",venue:"IEEE S&P 2018",url:"https://doi.org/10.1109/SP.2018.00008",
+  depth:{en:"Crossref metadata and abstract checked.",lv:"Pārbaudīti Crossref metadati un kopsavilkums."},
+  lim:{en:"Browser fingerprints only; dataset-specific results.",lv:"Tikai pārlūku pirkstu nospiedumi; rezultāti atkarīgi no datu kopas."}},
+ {ref:"Braithwaite 2024",title:"'Authorized Push Payment' Bank Fraud: What Does an Effective Regulatory Response Look Like?",venue:"Journal of Financial Regulation 10(2)",url:"https://doi.org/10.1093/jfr/fjae006",
+  depth:{en:"Publisher page, Crossref and abstract checked.",lv:"Pārbaudīta izdevēja lapa, Crossref un kopsavilkums."},
+  lim:{en:"UK legal analysis, not empirical; EU/Latvian rules may differ.",lv:"AK juridiska analīze, ne empīrisks pētījums; ES/Latvijas noteikumi var atšķirties."}}
+];
+
+const CHAINS = [
+ {src:"Braithwaite 2024",find:{en:"In push-payment scams the real customer is tricked into authorising the payment; recovery is limited.",lv:"Maksājumu krāpšanā pats klients tiek pierunāts autorizēt maksājumu; atgūšana ir ierobežota."},
+  interp:{en:"The 08:55 call (G1-B01) makes a manipulated customer payment plausible; a successful login cannot rule it out.",lv:"08:55 zvans (G1-B01) padara ticamu manipulētu klienta maksājumu; sekmīga pieteikšanās to nevar izslēgt."},
+  dec:{en:"D3 interview about the call; D2 without any promise of recovery.",lv:"D3 intervija par zvanu; D2 bez solījuma atgūt līdzekļus."},
+  lim:{en:"UK legal article, not empirical.",lv:"AK juridisks raksts, ne empīrisks."}},
+ {src:"Lin et al. 2022",find:{en:"Phishers can copy a victim's browser fingerprint to appear as a known device.",lv:"Pikšķerētāji var nokopēt upura pārlūka pirkstu nospiedumu, lai izskatītos kā zināma ierīce."},
+  interp:{en:"Device status cannot tell us who owns Dnew (G1-B04).",lv:"Ierīces statuss nevar pateikt, kam pieder Dnew (G1-B04)."},
+  dec:{en:"D1 end the session; R1 re-trust the device only after out-of-band verification.",lv:"D1 izbeigt sesiju; R1 ierīci atkal uzskatīt par uzticamu tikai pēc pārbaudes citā kanālā."},
+  lim:{en:"Browser-based; Dnew type unknown.",lv:"Attiecas uz pārlūkiem; Dnew veids nav zināms."}},
+ {src:"Achituve et al. 2019",find:{en:"Fraud is detected better from the whole sequence of actions than from the last payment alone.",lv:"Krāpšanu labāk atklāj pēc visas darbību secības, nevis tikai pēc pēdējā maksājuma."},
+  interp:{en:"Login, new payee and payment within 3 minutes, 09:00 to 09:03 (G1-01 to G1-04) form one suspicious chain.",lv:"Pieteikšanās, jauns saņēmējs un maksājums 3 minūšu laikā, no 09:00 līdz 09:03 (G1-01 līdz G1-04) veido vienu aizdomīgu ķēdi."},
+  dec:{en:"R3 monitor whole activity sequences, not single events; correlate P101 with S11 before drawing conclusions.",lv:"R3 uzraudzīt visas darbību secības, nevis atsevišķus notikumus; pirms secinājumiem sasaistīt P101 ar S11."},
+  lim:{en:"One bank's data; a pattern is not proof in this case.",lv:"Vienas bankas dati; modelis šajā gadījumā nav pierādījums."}}
+];
+
+const REVIEW = [
+ {id:"P-01",src:{en:"Peer group review",lv:"Kolēģu grupas pārbaude"},issue:{en:"not performed",lv:"nav veikta"},dec:"-",reason:{en:"Ring exchange has not happened yet.",lv:"Apmaiņa pa apli vēl nav notikusi."},retest:{en:"not performed",lv:"nav veikta"}},
+ {id:"T-1",src:{en:"Nils Briška: browser test",lv:"Nils Briška: pārlūka tests"},issue:{en:"not performed",lv:"nav veikts"},dec:"-",reason:{en:"Each member must test personally and record it.",lv:"Katram dalībniekam jāpārbauda personīgi un jāpieraksta."},retest:{en:"not performed",lv:"nav veikts"}},
+ {id:"T-2",src:{en:"Aleksandrs Kuziks: browser test",lv:"Aleksandrs Kuziks: pārlūka tests"},issue:{en:"not performed",lv:"nav veikts"},dec:"-",reason:{en:"Each member must test personally and record it.",lv:"Katram dalībniekam jāpārbauda personīgi un jāpieraksta."},retest:{en:"not performed",lv:"nav veikts"}},
+ {id:"L-00",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Limitation: the P9 review was run by a separate AI agent of the same model family as the generator, not by a different LLM.",lv:"Ierobežojums: P9 pārbaudi veica atsevišķs tās pašas modeļu saimes MI aģents, nevis cits LLM."},dec:{en:"-",lv:"-"},reason:{en:"Team should repeat P9 in a different LLM.",lv:"Komandai jāatkārto P9 citā LLM."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-01",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"\"A only\" still showed Incident B content in several sections.",lv:"Skatā \"Tikai A\" vairākās sadaļās bija redzams B incidenta saturs."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"A view now hides B-only items; response design sections show only in A+B.",lv:"A skatā B vienības paslēptas; reaģēšanas sadaļas redzamas tikai A+B skatā."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-02",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Print hid all architecture components.",lv:"Drukājot tika paslēptas visas arhitektūras komponentes."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Print now lists every component with role, authority and evidence.",lv:"Drukā tagad redzamas visas komponentes ar lomu, autoritāti un pierādījumiem."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-03",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"No LLM review rows; member names missing.",lv:"Nav LLM pārbaudes ierakstu; trūkst dalībnieku vārdu."},dec:{en:"Accepted in part",lv:"Daļēji pieņemts"},reason:{en:"Rows added here. Member names must be added by the team.",lv:"Ieraksti pievienoti šeit. Dalībnieku vārdi jāpievieno komandai."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-04",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Authentication vs payment approval not stated explicitly.",lv:"Nav skaidri norādīta atšķirība starp autentifikāciju un maksājuma apstiprināšanu."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Statement and approval-step unknown added to both versions.",lv:"Abām versijām pievienots apgalvojums un nezināmais par apstiprinājuma soli."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-05",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Copies column claimed copies not shown in the evidence; SIEM not in evidence.",lv:"Kolonnā Kopijas bija kopijas, kas pierādījumos nav redzamas; SIEM nav pierādījumos."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Copies reworded or marked as group assumption; component renamed SOC case system.",lv:"Kopijas pārformulētas vai atzīmētas kā pieņēmums; komponente pārdēvēta par SOC lietu sistēmu."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-06",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Wrong interval (4 minutes instead of 3).",lv:"Nepareizs intervāls (4 minūtes 3 vietā)."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Changed to 3 minutes, 09:00 to 09:03.",lv:"Mainīts uz 3 minūtēm, 09:00 līdz 09:03."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-07",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Chart mixes event time (A) and receipt time (B).",lv:"Diagrammā sajaukts notikuma laiks (A) un saņemšanas laiks (B)."},dec:{en:"Accepted in part",lv:"Daļēji pieņemts"},reason:{en:"Labels, legend and chart description now say which time is plotted; separate lanes not built.",lv:"Apzīmējumi, leģenda un apraksts norāda attēloto laiku; atsevišķas joslas nav izveidotas."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-08",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Sticky header covers half of a 375 px screen.",lv:"Fiksētā galvene aizsedz pusi no 375 px ekrāna."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Header is no longer sticky below 700 px.",lv:"Zem 700 px galvene vairs nav fiksēta."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-09",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Latvian wording errors.",lv:"Kļūdas latviešu valodas formulējumos."},dec:{en:"Accepted in part",lv:"Daļēji pieņemts"},reason:{en:"Team text fixed. G1-B01 to G1-B04 Latvian texts kept verbatim from the lecturer's handout.",lv:"Komandas teksts labots. G1-B01 līdz G1-B04 teksti saglabāti burtiski no pasniedzēja materiāla."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-10",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Timeline source column and status message not translated.",lv:"Laika līnijas avota kolonna un statusa ziņa nebija tulkotas."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Sources translated; status message cleared on language change.",lv:"Avoti tulkoti; statusa ziņa notīrīta, mainot valodu."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-11",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"R1 test did not cover the whole criterion.",lv:"R1 pārbaude neaptvēra visu kritēriju."},dec:{en:"Accepted",lv:"Pieņemts"},reason:{en:"Test now covers all Dnew sessions and device trust.",lv:"Pārbaude tagad aptver visas Dnew sesijas un ierīces uzticamību."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}},
+ {id:"L-12",src:{en:"P9 independent AI review",lv:"P9 neatkarīga MI pārbaude"},issue:{en:"Some paper links overstated; call stated as fact; other explanations dropped.",lv:"Dažas atsauces pārspīlētas; zvans pasniegts kā fakts; izlaisti citi skaidrojumi."},dec:{en:"Accepted in part",lv:"Daļēji pieņemts"},reason:{en:"Wiefling removed from D3; Achituve linked to R3; wording fixed; H3 line added. \"Team to confirm\" kept because it is true until the team reads the papers.",lv:"Wiefling noņemts no D3; Achituve saistīts ar R3; formulējums labots; pievienots H3. \"Komandai jāapstiprina\" saglabāts, jo tas ir patiesi, kamēr komanda nav izlasījusi rakstus."},retest:{en:"AI assistant, headless Chrome (not a member test)",lv:"MI asistents, Chrome bez saskarnes (nav dalībnieka tests)"}}
+];
+
+/* ===== UI strings ===== */
+const GLOSS = [
+ {w:{en:"Authentication",lv:"Autentifikācija"},d:{en:"The login check passed. It does not say who typed the details.",lv:"Pieteikšanās pārbaude izdevās. Tā nepasaka, kas ievadīja datus."}},
+ {w:{en:"Accepted",lv:"Pieņemts"},d:{en:"The bank took the payment order. The money may not have moved yet.",lv:"Banka pieņēma maksājuma rīkojumu. Nauda, iespējams, vēl nav pārvietota."}},
+ {w:{en:"Posting (J101)",lv:"Grāmatojums (J101)"},d:{en:"The money was booked off the customer's account inside the bank.",lv:"Nauda norakstīta no klienta konta bankas iekšienē."},b:1},
+ {w:{en:"Settlement",lv:"Norēķins"},d:{en:"The money actually reached the other bank. Still unknown.",lv:"Nauda faktiski nonāca otrā bankā. Joprojām nav zināms."}},
+ {w:{en:"Session (S11)",lv:"Sesija (S11)"},d:{en:"One logged-in visit to online banking.",lv:"Viena pieteikšanās reize internetbankā."}},
+ {w:{en:"Payee / beneficiary (B71)",lv:"Saņēmējs (B71)"},d:{en:"The account the money was sent to.",lv:"Konts, uz kuru nosūtīta nauda."}},
+ {w:{en:"H1 / H2",lv:"H1 / H2"},d:{en:"Our two possible explanations. Neither is proven.",lv:"Mūsu divi iespējamie skaidrojumi. Neviens nav pierādīts."}}
+];
+
+const UI = {
+ title:{en:"Group 1 · New device and a disputed payment · Investigation dashboard",lv:"1. grupa · Jauna ierīce un apstrīdēts maksājums · Izmeklēšanas panelis"},
+ inshortA:{en:"Someone logged in to customer C101's online bank from a new device, added a new payee and sent EUR 2,400, all within 3 minutes. The fraud system raised an alert, but the payment was still accepted. The customer says it wasn't them. We don't know whether a criminal did it (H1) or the customer did it after being tricked or by mistake (H2), and we don't know if the money has left the bank.",
+  lv:"Kāds pieteicās klienta C101 internetbankā no jaunas ierīces, pievienoja jaunu saņēmēju un nosūtīja 2400 EUR, viss 3 minūšu laikā. Krāpšanas novēršanas sistēma izdeva brīdinājumu, tomēr maksājums tika pieņemts. Klients saka, ka to nav darījis. Nav zināms, vai to izdarīja noziedznieks (H1) vai klients pats, piemānīts vai kļūdas pēc (H2), un nav zināms, vai nauda ir aizgājusi no bankas."},
+ inshortAB:{en:"Someone logged in to customer C101's online bank from a new device, added a new payee and sent EUR 2,400, all within 3 minutes. The customer says it wasn't them, and now also says a fake 'bank employee' called them just before. We still don't know whether a criminal did it (H1) or the customer was tricked into doing it (H2). The money has been taken off the account, but we don't know if it has left the bank. The session is still open, so closing it comes first.",
+  lv:"Kāds pieteicās klienta C101 internetbankā no jaunas ierīces, pievienoja jaunu saņēmēju un nosūtīja 2400 EUR, viss 3 minūšu laikā. Klients saka, ka to nav darījis, un tagad arī ziņo, ka tieši pirms tam viņam zvanīja viltus 'bankas darbinieks'. Joprojām nav zināms, vai to izdarīja noziedznieks (H1) vai klients tika piemānīts to izdarīt (H2). Nauda ir norakstīta no konta, bet nav zināms, vai tā ir aizgājusi no bankas. Sesija joprojām ir atvērta, tāpēc vispirms tā jāaizver."},
+ inshortT:{en:"In short",lv:"Īsumā"},
+ glossT:{en:"Words used on this page",lv:"Šajā lapā lietotie termini"},
+ lang:{en:"Language",lv:"Valoda"}, ver:{en:"Analysis version",lv:"Analīzes versija"},
+ aonly:{en:"A only",lv:"Tikai A"}, ab:{en:"A+B",lv:"A+B"},
+ sys:{en:"System filter",lv:"Sistēmas filtrs"}, all:{en:"All systems",lv:"Visas sistēmas"},
+ reset:{en:"Reset demonstration",lv:"Atiestatīt demonstrāciju"}, print:{en:"Print",lv:"Drukāt"},
+ state:{en:"Nothing is saved. Reloading the page starts the demo from scratch.",lv:"Nekas netiek saglabāts. Pārlādējot lapu, demonstrācija sākas no jauna."},
+ notice:{en:"Synthetic teaching data. This is a demonstration dashboard, not a bank or SOC system. No real customer, payment or action is shown.",lv:"Sintētiski mācību dati. Šis ir demonstrācijas panelis, nevis bankas vai SOC sistēma. Netiek rādīts neviens reāls klients, maksājums vai darbība."},
+ s1:{en:"1. Group, roles and case",lv:"1. Grupa, lomas un gadījums"},
+ s2:{en:"2. Summary",lv:"2. Kopsavilkums"},
+ s3:{en:"3. Timeline",lv:"3. Laika līnija"},
+ s4:{en:"4. Architecture and data flow",lv:"4. Arhitektūra un datu plūsma"},
+ s5:{en:"5. Which system to trust for what",lv:"5. Kurai sistēmai uzticēties un par ko"},
+ s6:{en:"6. H1 vs H2: who did it?",lv:"6. H1 pret H2: kurš to izdarīja?"},
+ s7:{en:"7. What we would do now",lv:"7. Ko mēs darītu tagad"},
+ s8:{en:"8. How we know it is safe again",lv:"8. Kā zinām, ka atkal ir droši"},
+ s9:{en:"9. Customer message",lv:"9. Ziņojums klientam"},
+ s10:{en:"10. Verified papers",lv:"10. Pārbaudītās publikācijas"},
+ s11:{en:"11. How the papers shaped our decisions",lv:"11. Kā publikācijas ietekmēja mūsu lēmumus"},
+ s12:{en:"12. Zotero collection",lv:"12. Zotero kolekcija"},
+ s13:{en:"13. Peer and LLM review log",lv:"13. Kolēģu un LLM pārbaudes žurnāls"},
+ group:{en:"Group",lv:"Grupa"}, names:{en:"Members: Nils Briška and Aleksandrs Kuziks (two-person group).",lv:"Dalībnieki: Nils Briška un Aleksandrs Kuziks (divu cilvēku grupa)."},
+ roleA:{en:"A (Nils Briška): customer and fraud aspects (identity, customer communication, fraud)",lv:"A (Nils Briška): klienta un krāpšanas aspekti (identitāte, saziņa ar klientu, krāpšana)"},
+ roleB:{en:"B (Aleksandrs Kuziks): systems and response (systems, evidence, HTML, response plan). Both members cross-check each other.",lv:"B (Aleksandrs Kuziks): sistēmas un reaģēšana (sistēmas, pierādījumi, HTML, reaģēšanas plāns). Abi dalībnieki pārbauda viens otru."},
+ roleC:{en:"C: fraud, response and critical review",lv:"C: krāpšana, reaģēšana un kritiskā pārbaude"},
+ caseTxt:{en:"Customer C101 denies creating beneficiary B71 and does not recognise payment P101 of EUR 2,400. Who controlled the session and how the customer interacted with authentication have not been established.",
+  lv:"Klients C101 noliedz saņēmēja B71 izveidi un neatpazīst maksājumu P101 par 2400 EUR. Nav noskaidrots, kurš kontrolēja sesiju un kā klients mijiedarbojās ar autentifikāciju."},
+ viewing:{en:"Showing analysis version:",lv:"Rādītā analīzes versija:"},
+ confirmed:{en:"Confirmed information (observations)",lv:"Apstiprināta informācija (novērojumi)"},
+ hyps:{en:"Hypotheses (not established)",lv:"Hipotēzes (nav apstiprinātas)"},
+ unknowns:{en:"Unknowns",lv:"Nezināmie"}, status:{en:"Current status",lv:"Pašreizējais statuss"},
+ revision:{en:"Decision log",lv:"Lēmumu žurnāls"},
+ distinct:{en:"Four different things, don't mix them up: the login passed (G1-02, G1-B02), the bank accepted the payment order (G1-06), the money was booked off the account (G1-B03), and the money reached the other bank (unknown). A passed login does not prove the customer agreed to the payment, and we don't know if the payment had its own confirmation step.",lv:"Četras dažādas lietas, tās nedrīkst jaukt: pieteikšanās izdevās (G1-02, G1-B02), banka pieņēma maksājuma rīkojumu (G1-06), nauda norakstīta no konta (G1-B03) un nauda nonāca otrā bankā (nav zināms). Sekmīga pieteikšanās nepierāda, ka klients piekrita maksājumam, un nav zināms, vai maksājumam bija atsevišķs apstiprinājuma solis."},
+ distinctA:{en:"Three different things, don't mix them up: the login passed (G1-02), the bank accepted the payment order (G1-06), and the money reached the other bank (unknown). A passed login does not prove the customer agreed to the payment, and we don't know if the payment had its own confirmation step.",lv:"Trīs dažādas lietas, tās nedrīkst jaukt: pieteikšanās izdevās (G1-02), banka pieņēma maksājuma rīkojumu (G1-06) un nauda nonāca otrā bankā (nav zināms). Sekmīga pieteikšanās nepierāda, ka klients piekrita maksājumam, un nav zināms, vai maksājumam bija atsevišķs apstiprinājuma solis."},
+ respA:{en:"In version A no response plan existed yet. The A checkpoint recommended: (1) get the full login record for S11; (2) link P101 to its session and check for a separate payment approval step; (3) interview the customer and check settlement before choosing between H1 and H2. Decisions D1 to D3, recovery criteria, the customer message and the research chains below were designed after Incident B and are shown only in the A+B view.",
+  lv:"A versijā reaģēšanas plāna vēl nebija. A kontrolpunktā ieteikts: (1) iegūt pilnu S11 pieteikšanās ierakstu; (2) sasaistīt P101 ar tā sesiju un pārbaudīt atsevišķu maksājuma apstiprinājuma soli; (3) intervēt klientu un pārbaudīt norēķinu pirms izvēles starp H1 un H2. Lēmumi D1 līdz D3, atjaunošanas kritēriji, ziņojums klientam un pētījumu ķēdes tika izstrādāti pēc B incidenta un redzami tikai A+B skatā."},
+ h3:{en:"Other explanations (not ruled in or out): a family member or someone with access, remote-access software, a logging/ID mismatch, or the customer disputing a payment they made.",lv:"Citi skaidrojumi (nav ne apstiprināti, ne izslēgti): ģimenes loceklis vai cita persona ar piekļuvi, attālinātās piekļuves programmatūra, žurnālu/ID neatbilstība vai klients apstrīd paša veiktu maksājumu."},
+ tlNoteA:{en:"Each record shows the time it happened (UTC).",lv:"Katram ierakstam norādīts laiks, kad tas notika (UTC)."},
+ tlNote:{en:"Each A record has one time: when it happened. Each B record has two: when we received it, and the time it talks about. Example: G1-B01 arrived at 09:12 but is about a call at 08:55.",lv:"Katram A ierakstam ir viens laiks: kad tas notika. Katram B ierakstam ir divi: kad to saņēmām un uz kuru laiku tas attiecas. Piemērs: G1-B01 saņemts 09:12, bet runā par zvanu 08:55."},
+ legendA:{en:"Legend: circle = Incident A record at event time.",lv:"Apzīmējumi: aplis = A incidenta ieraksts pēc notikuma laika."},
+ legend:{en:"Legend: circle = Incident A record at event time; square = Incident B record at receipt time (recv). G1-B02 is received at 09:13 but describes the 09:01 authentication (G1-02).",lv:"Apzīmējumi: aplis = A incidenta ieraksts pēc notikuma laika; kvadrāts = B incidenta ieraksts pēc saņemšanas laika (saņ.). G1-B02 saņemts 09:13, bet apraksta 09:01 autentifikāciju (G1-02)."},
+ thRecv:{en:"Received (UTC)",lv:"Saņemts (UTC)"}, thEvt:{en:"Event time (UTC)",lv:"Notikuma laiks (UTC)"},
+ thId:{en:"ID",lv:"ID"}, thSrc:{en:"Source",lv:"Avots"}, thWhat:{en:"What it says",lv:"Ko tas saka"}, thRaw:{en:"Original fields",lv:"Sākotnējie lauki"},
+ empty:{en:"No events match this filter in the selected view.",lv:"Atlasītajā skatā šim filtram neatbilst neviens notikums."},
+ showing:{en:"Showing {n} of {t} records",lv:"Rāda {n} no {t} ierakstiem"},
+ archNote:{en:"Click a box to see what it does, what it is the trusted source for, and which records come from it. Dashed box = our assumption, not in the evidence.",lv:"Noklikšķiniet uz bloka, lai redzētu, ko tas dara, par ko tas ir uzticamais avots un kuri ieraksti no tā nāk. Raustīta apmale = mūsu pieņēmums, nav pierādījumos."},
+ archPick:{en:"Nothing selected yet.",lv:"Vēl nekas nav izvēlēts."},
+ role:{en:"Role",lv:"Loma"}, authority:{en:"Data authority",lv:"Datu autoritāte"}, evidence:{en:"Evidence",lv:"Pierādījumi"},
+ thItem:{en:"Information",lv:"Informācija"}, thAuth:{en:"Trusted source",lv:"Uzticamais avots"}, thCopies:{en:"Also appears in",lv:"Parādās arī"}, thUnc:{en:"What is unclear",lv:"Kas nav skaidrs"},
+ thHyp:{en:"Hypothesis",lv:"Hipotēze"}, thSup:{en:"Points for it",lv:"Argumenti par"}, thCon:{en:"Points against",lv:"Argumenti pret"}, thGap:{en:"What we still need",lv:"Kas vēl jānoskaidro"}, thConf:{en:"How sure we are",lv:"Cik esam pārliecināti"},
+ matrix:{en:"Each record vs H1 and H2",lv:"Katrs ieraksts pret H1 un H2"},
+ matrixNote:{en:"How each record affects H1 and H2: ++ supports, + slightly supports, − speaks against, = doesn't help decide.",lv:"Kā katrs ieraksts ietekmē H1 un H2: ++ atbalsta, + nedaudz atbalsta, − runā pretī, = nepalīdz izšķirt."},
+ thNote:{en:"Note",lv:"Piezīme"},
+ thAct:{en:"What",lv:"Kas jādara"}, thWhy:{en:"Why (evidence)",lv:"Kāpēc (pierādījumi)"}, thOwn:{en:"Who does it, and on what",lv:"Kurš to dara un uz ko attiecas"}, thEvd:{en:"Save first / downsides",lv:"Vispirms saglabāt / blakusefekti"}, thRel:{en:"When it can be lifted",lv:"Kad to var atcelt"},
+ decNote:{en:"These are proposals for the exercise. Nothing has actually been done.",lv:"Šie ir priekšlikumi mācību uzdevumam. Nekas nav faktiski izdarīts."},
+ thCrit:{en:"What must be true",lv:"Kam jābūt izpildītam"}, thTest:{en:"How we check",lv:"Kā pārbaudām"}, thEv:{en:"Proof",lv:"Pierādījums"}, thWho:{en:"Who checks / approves",lv:"Kas pārbauda / apstiprina"}, thFail:{en:"If it fails",lv:"Ja neizdodas"},
+ simTitle:{en:"Practice checklist (SIMULATION)",lv:"Treniņa kontrolsaraksts (SIMULĀCIJA)"},
+ simNote:{en:"Ticking a box here does not mean a real test was done.",lv:"Atzīme šeit nenozīmē, ka veikta reāla pārbaude."},
+ simTicked:{en:"Simulated ticks: {n} of 3",lv:"Simulētās atzīmes: {n} no 3"},
+ recNote:{en:"Getting back to normal means three separate things: the customer can safely log in again (R1), the money question is cleared up (R2), and nothing suspicious happens afterwards (R3). Restarting a device or closing the case is not enough.",lv:"Atgriešanās normālā stāvoklī nozīmē trīs atsevišķas lietas: klients var droši pieteikties atkal (R1), jautājums par naudu ir noskaidrots (R2) un pēc tam nenotiek nekas aizdomīgs (R3). Ar ierīces restartēšanu vai lietas slēgšanu nepietiek."},
+ msgNote:{en:"It does not promise the money back, does not guess the cause, and does not ask for passwords or codes.",lv:"Tas nesola atgūt naudu, nemin cēloni un neprasa paroles vai kodus."},
+ thRef:{en:"Reference",lv:"Atsauce"}, thTitle:{en:"Original title",lv:"Oriģinālais nosaukums"}, thVenue:{en:"Venue",lv:"Izdevums"}, thDepth:{en:"How carefully we checked it",lv:"Cik rūpīgi pārbaudīts"}, thLim:{en:"Limitation",lv:"Ierobežojums"},
+ linkNote:{en:"Links open in a new tab and need internet access.",lv:"Saites atveras jaunā cilnē, un tām nepieciešams internets."},
+ thFind:{en:"The paper found",lv:"Pētījumā atklāts"}, thInterp:{en:"What it means for us",lv:"Ko tas nozīmē mums"}, thDec:{en:"So we decided",lv:"Tāpēc nolēmām"},
+ chainNote:{en:"What a paper found is not a fact about this case. It only helps us decide what to do.",lv:"Pētījuma atziņa nav fakts par šo gadījumu. Tā tikai palīdz izlemt, ko darīt."},
+ zotero:{en:"Suggested Zotero folder name: BIS07_Group1_IncidentA. The team still has to confirm that the 6 papers and notes are saved there. This page is not connected to Zotero.",lv:"Ieteiktais Zotero mapes nosaukums: BIS07_Group1_IncidentA. Komandai vēl jāapstiprina, ka tur saglabātas 6 publikācijas un piezīmes. Šī lapa nav savienota ar Zotero."},
+ thRid:{en:"Comment ID",lv:"Komentāra ID"}, thRsrc:{en:"Source",lv:"Avots"}, thIssue:{en:"Specific issue",lv:"Konkrēta problēma"}, thRdec:{en:"Decision",lv:"Lēmums"}, thReason:{en:"Reason / change",lv:"Pamatojums / izmaiņas"}, thRetest:{en:"Retested by",lv:"Atkārtoti pārbaudīja"},
+ reviewNote:{en:"\"Not performed\" means the check has not been done yet. It does not mean it passed.",lv:"\"Nav veikta\" nozīmē, ka pārbaude vēl nav veikta. Tas nenozīmē, ka tā ir izturēta."},
+ resetDone:{en:"Demonstration reset: filters and simulated ticks cleared. Evidence and review log are unchanged.",lv:"Demonstrācija atiestatīta: filtri un simulētās atzīmes notīrītas. Pierādījumi un pārbaudes žurnāls nav mainīti."}
+};
+
+/* ===== STATE (memory only) ===== */
+const state = {lang:"en", ver:"AB", sys:"all", ticks:new Set(), arch:null};
+const t = o => (o && typeof o === "object") ? (o[state.lang] ?? o.en) : (o ?? "");
+const u = k => t(UI[k]);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const table = (heads, rows, cap) => `<div class="scroll" tabindex="0" role="region" aria-label="${esc(cap)}"><table><caption class="small" style="text-align:left">${esc(cap)}</caption><thead><tr>${heads.map(h=>`<th scope="col">${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+
+const cards = (items) => `<div class="cards">${items.map(c => `<article class="card"><h3>${c.title}</h3><dl>${c.rows.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></article>`).join("")}</div>`;
+
+/* ===== FILTERS ===== */
+function visibleEvents(){
+  return EVENTS.filter(e => (state.ver === "AB" || e.set === "A") && (state.sys === "all" || e.sys === state.sys));
+}
+
+/* ===== RENDERING ===== */
+function renderTimelineSvg(evs){
+  const toMin = s => { const [h,m] = s.split(":").map(Number); return h*60+m; };
+  const start = toMin("08:50"), end = toMin("09:20"), W = 800, L = 40, R = 20;
+  const x = s => L + (toMin(s)-start)/(end-start)*(W-L-R);
+  const count = {};
+  let marks = "";
+  evs.forEach((e, i) => {
+    const tm = e.set === "A" ? e.evt : e.plot;
+    const n = count[tm] = (count[tm]||0)+1;
+    const cx = x(tm) + (n-1)*9, cy = 160;          // same-minute records are nudged sideways
+    const ly = 150 - (i % 6)*20;                    // stagger labels on 6 levels so they do not overlap
+    const shape = e.set === "A"
+      ? `<circle cx="${cx}" cy="${cy}" r="6" fill="#1f4fa3"/>`
+      : `<rect x="${cx-6}" y="${cy-6}" width="12" height="12" fill="#fff" stroke="#8a4b00" stroke-width="3"/>`;
+    marks += `<g><line x1="${cx}" y1="${ly+3}" x2="${cx}" y2="${cy-6}" stroke="#9aa3b0"/>${shape}<text x="${cx}" y="${ly}" text-anchor="middle" font-size="11" fill="#1a1d21" stroke="#fff" stroke-width="4" paint-order="stroke">${esc(e.id)} · ${esc(tm)}${e.set==="B" ? (state.lang==="lv"?" saņ.":" recv") : ""}</text></g>`;
+  });
+  // marker for the reported 08:55 call (described time, not a log record)
+  let call = "";
+  if (state.ver === "AB" && (state.sys === "all" || state.sys === "CRM")) {
+    const cx = x("08:55");
+    call = `<g><line x1="${cx}" y1="34" x2="${cx}" y2="175" stroke="#8a4b00" stroke-dasharray="4 3"/><text x="${cx+4}" y="30" font-size="11" fill="#8a4b00">${esc(state.lang==="lv"?"08:55 ziņotais zvans (G1-B01)":"08:55 reported call (G1-B01)")}</text></g>`;
+  }
+  let ticks = "";
+  for (let m = start; m <= end; m += 5) {
+    const lbl = `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
+    ticks += `<line x1="${x(lbl)}" y1="175" x2="${x(lbl)}" y2="181" stroke="#1a1d21"/><text x="${x(lbl)}" y="196" text-anchor="middle" font-size="11">${lbl}</text>`;
+  }
+  const label = state.lang==="lv" ? "Laika līnija 08:50 līdz 09:20 UTC: A ieraksti pēc notikuma laika, B ieraksti pēc saņemšanas laika" : "Timeline 08:50 to 09:20 UTC: A records at event time, B records at receipt time";
+  return `<div class="tl-wrap"><svg viewBox="0 0 ${W} 205" role="img" aria-label="${esc(label)}"><line x1="${L}" y1="175" x2="${W-R}" y2="175" stroke="#1a1d21"/>${ticks}${call}${marks}</svg></div>`;
+}
+
+function render(){
+  const L = state.lang, an = ANALYSIS[state.ver], evs = visibleEvents(), total = EVENTS.filter(e => state.ver==="AB" || e.set==="A").length;
+  document.documentElement.lang = L;
+  document.title = u("title");
+  // header controls
+  document.getElementById("title").textContent = u("title");
+  document.getElementById("lg-lang").textContent = u("lang");
+  document.getElementById("lg-ver").textContent = u("ver");
+  document.getElementById("btn-a").textContent = u("aonly");
+  document.getElementById("btn-ab").textContent = u("ab");
+  document.getElementById("lb-sys").textContent = u("sys");
+  document.getElementById("btn-reset").textContent = u("reset");
+  document.getElementById("btn-print").textContent = u("print");
+  document.getElementById("statenote").textContent = u("state");
+  document.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === L));
+  document.querySelectorAll("[data-ver]").forEach(b => b.setAttribute("aria-pressed", b.dataset.ver === state.ver));
+  const sel = document.getElementById("sysfilter");
+  sel.innerHTML = `<option value="all">${esc(u("all"))}</option>` + Object.keys(SYSTEMS).map(k => `<option value="${k}">${esc(t(SYSTEMS[k]))}</option>`).join("");
+  sel.value = state.sys;
+
+  const li = arr => `<ul>${arr.map(x => `<li>${esc(t(x))}</li>`).join("")}</ul>`;
+  const verName = state.ver === "A" ? u("aonly") : u("ab");
+  let h = "";
+
+  // 1
+  h += `<section aria-labelledby="h1s"><h2 id="h1s">${esc(u("s1"))}</h2><p class="notice">${esc(u("notice"))}</p>
+   <p><strong>${esc(u("group"))} 1</strong>. ${esc(u("names"))}</p><ul><li>${esc(u("roleA"))}</li><li>${esc(u("roleB"))}</li></ul><p>${esc(u("caseTxt"))}</p><h3>${esc(u("glossT"))}</h3><dl class="gloss">${GLOSS.filter(g => state.ver==="AB" || !g.b).map(g => `<div><dt>${esc(t(g.w))}</dt><dd>${esc(t(g.d))}</dd></div>`).join("")}</dl></section>`;
+
+  // 2
+  h += `<section aria-labelledby="h2s"><h2 id="h2s">${esc(u("s2"))}</h2><p><span class="tag">${esc(u("viewing"))} ${esc(verName)}</span></p>
+   <div class="inshort"><strong>${esc(u("inshortT"))}:</strong> ${esc(u(state.ver==="A"?"inshortA":"inshortAB"))}</div>
+   <div class="grid2"><div><h3>${esc(u("confirmed"))}</h3>${li(an.confirmed)}</div><div><h3>${esc(u("hyps"))}</h3>${li(an.hyp)}<h3>${esc(u("unknowns"))}</h3>${li(an.unknown)}</div></div>
+   <p class="small">${esc(u("h3"))}</p>
+   <h3>${esc(u("status"))}</h3><p>${esc(t(an.status))}</p><p class="small">${esc(u(state.ver==="A"?"distinctA":"distinct"))}</p>
+   ${an.revision ? `<h3>${esc(u("revision"))}</h3><p>${esc(t(an.revision))}</p>` : ""}</section>`;
+
+  // 3
+  const tlRows = evs.map(e => `<tr><td>${e.recv ? esc(e.recv) : esc(t(NS))}</td><td>${typeof e.evt === "string" ? esc(e.evt) : e.evt ? esc(t(e.evt)) : esc(t(NS))}</td><td><span class="tag ${e.set==="B"?"b":""}">${esc(e.set)}</span> <strong>${esc(e.id)}</strong></td><td>${esc(state.lang==="lv" && SRC_LV[e.src] ? SRC_LV[e.src] : e.src)}</td><td>${esc(t(e))}</td><td class="mono">${e.raw ? esc(e.raw) : "-"}</td></tr>`);
+  h += `<section aria-labelledby="h3s"><h2 id="h3s">${esc(u("s3"))}</h2><p class="small">${esc(u(state.ver==="A"?"tlNoteA":"tlNote"))}</p><p class="small">${esc(u(state.ver==="A"?"legendA":"legend"))}</p>
+   ${renderTimelineSvg(evs)}
+   <p class="small"><strong>${esc(u("showing").replace("{n}", evs.length).replace("{t}", total))}</strong></p>
+   ${evs.length ? table([u("thRecv"),u("thEvt"),u("thId"),u("thSrc"),u("thWhat"),u("thRaw")], tlRows, u("s3")) : `<p class="empty" role="status">${esc(u("empty"))}</p>`}</section>`;
+
+  // 4
+  const archHtml = ARCH.map((ly,i) => `${i ? `<div class="arrow" aria-hidden="true">&#8595;</div>` : ""}<div class="layer"><span class="lname">${esc(t(ly.layer))}</span>${ly.items.filter(it => state.ver==="AB" || !it.onlyB).map(it => `<button type="button" class="${it.assumed?"assumed":""}" data-arch="${it.k}" aria-pressed="${state.arch===it.k}" aria-controls="archdetail">${esc(t(it.name))}</button>`).join("")}</div>`).join("");
+  h += `<section aria-labelledby="h4s"><h2 id="h4s">${esc(u("s4"))}</h2><p class="small">${esc(u("archNote"))}</p><div class="arch">${archHtml}</div><div id="archdetail" class="detail" aria-live="polite">${archDetail()}</div><ul class="printonly">${ARCH.flatMap(l=>l.items).filter(it => state.ver==="AB" || !it.onlyB).map(it => `<li><strong>${esc(t(it.name))}</strong>: ${esc(t(it.role))} ${esc(t(it.auth))} (${esc(t(evOf(it)))})</li>`).join("")}</ul></section>`;
+
+  // 5
+  h += `<section aria-labelledby="h5s"><h2 id="h5s">${esc(u("s5"))}</h2>${table([u("thItem"),u("thAuth"),u("thCopies"),u("thUnc")], AUTHORITY.filter(a => state.ver==="AB" || !a.onlyB).map(a => `<tr><td>${esc(t(state.ver==="A" && a.itemA ? a.itemA : a.item))}</td><td>${esc(t(a.sys))}</td><td>${esc(t(state.ver==="A" && a.copiesA ? a.copiesA : a.copies))}</td><td>${esc(t(a.unc))}</td></tr>`), u("s5"))}</section>`;
+
+  // 6
+  const hypRows = HYP[state.ver].map(x => `<tr><th scope="row">${x.h}</th><td>${esc(t(x.sup))}</td><td>${esc(t(x.con))}</td><td>${esc(t(x.gap))}</td><td>${esc(t(x.conf))}</td></tr>`);
+  const mEvs = EVENTS.filter(e => state.ver==="AB" || e.set==="A");
+  const cell = v => `<td class="${v==="s"||v==="w"?"sup":v==="c"?"ch":""}">${MLABEL[v].sym} ${esc(t(MLABEL[v]))}</td>`;
+  const mRows = mEvs.map(e => `<tr><th scope="row">${esc(e.id)}</th>${cell(MATRIX[e.id][0])}${cell(MATRIX[e.id][1])}<td>${MNOTE[e.id] ? esc(t(MNOTE[e.id])) : ""}</td></tr>`);
+  h += `<section aria-labelledby="h6s"><h2 id="h6s">${esc(u("s6"))}</h2><p><span class="tag">${esc(u("viewing"))} ${esc(verName)}</span></p>
+   ${table([u("thHyp"),u("thSup"),u("thCon"),u("thGap"),u("thConf")], hypRows, u("s6"))}
+   <h3>${esc(u("matrix"))}</h3><p class="small">${esc(u("matrixNote"))}</p>${table([u("thId"),"H1","H2",u("thNote")], mRows, u("matrix"))}</section>`;
+
+  // 7 to 9 and 11: response design was made after Incident B, so version A shows the A checkpoint instead
+  if (state.ver === "A") {
+    h += `<section aria-labelledby="h7s"><h2 id="h7s">${esc(u("s7"))} / ${esc(u("s8"))} / ${esc(u("s9"))} / ${esc(u("s11"))}</h2><p>${esc(u("respA"))}</p></section>`;
+  } else {
+  h += `<section aria-labelledby="h7s"><h2 id="h7s">${esc(u("s7"))}</h2><p class="small">${esc(u("decNote"))}</p>${cards(DECISIONS.map(d => ({title:`${d.id} · ${esc(t(d.act))}`, rows:[[u("thWhy"),d.why],[u("thOwn"),t(d.own)],[u("thEvd"),t(d.evd)],[u("thRel"),t(d.rel)]]})))}</section>`;
+
+  // 8
+  h += `<section aria-labelledby="h8s"><h2 id="h8s">${esc(u("s8"))}</h2><p class="small">${esc(u("recNote"))}</p>${cards(RECOVERY.map(x => ({title:`${x.id} · ${esc(t(x.crit))}`, rows:[[u("thTest"),t(x.test)],[u("thEv"),t(x.ev)],[u("thWho"),t(x.who)],[u("thFail"),t(x.fail)]]})))}
+   <h3>${esc(u("simTitle"))}</h3><p class="small">${esc(u("simNote"))}</p>
+   ${RECOVERY.map(r => `<div class="check"><input type="checkbox" id="sim-${r.id}" data-sim="${r.id}" ${state.ticks.has(r.id)?"checked":""}><label for="sim-${r.id}" style="color:inherit;font-size:.95rem">${r.id}: ${esc(t(r.crit))}</label></div>`).join("")}
+   <p class="small" id="simcount" role="status">${esc(u("simTicked").replace("{n}", state.ticks.size))}</p></section>`;
+
+  // 9
+  h += `<section aria-labelledby="h9s"><h2 id="h9s">${esc(u("s9"))}</h2><blockquote>${esc(t(MESSAGE))}</blockquote><p class="small">${esc(u("msgNote"))}</p></section>`;
+
+  }
+  // 10
+  h += `<section aria-labelledby="h10s"><h2 id="h10s">${esc(u("s10"))}</h2><p class="small">${esc(u("linkNote"))}</p>${table([u("thRef"),u("thTitle"),u("thVenue"),u("thDepth"),u("thLim")], PAPERS.map(p => `<tr><td>${esc(p.ref)}</td><td><a href="${p.url}" target="_blank" rel="noopener noreferrer">${esc(p.title)}</a></td><td>${esc(p.venue)}</td><td>${esc(t(p.depth))}</td><td>${esc(t(p.lim))}</td></tr>`), u("s10"))}</section>`;
+
+  // 11 (A+B only)
+  if (state.ver === "AB") {
+  h += `<section aria-labelledby="h11s"><h2 id="h11s">${esc(u("s11"))}</h2><p class="small">${esc(u("chainNote"))}</p>${cards(CHAINS.map(c => ({title:esc(c.src), rows:[[u("thFind"),t(c.find)],[u("thInterp"),t(c.interp)],[u("thDec"),t(c.dec)],[u("thLim"),t(c.lim)]]})))}</section>`;
+
+  }
+  // 12
+  h += `<section aria-labelledby="h12s"><h2 id="h12s">${esc(u("s12"))}</h2><p>${esc(u("zotero"))}</p></section>`;
+
+  // 13
+  h += `<section aria-labelledby="h13s"><h2 id="h13s">${esc(u("s13"))}</h2><p class="small">${esc(u("reviewNote"))}</p>${table([u("thRid"),u("thRsrc"),u("thIssue"),u("thRdec"),u("thReason"),u("thRetest")], REVIEW.map(r => `<tr><td>${esc(r.id)}</td><td>${esc(t(r.src))}</td><td>${esc(t(r.issue))}</td><td>${esc(t(r.dec))}</td><td>${esc(t(r.reason))}</td><td>${esc(t(r.retest))}</td></tr>`), u("s13"))}</section>`;
+
+  document.getElementById("main").innerHTML = h;
+}
+
+function archDetail(){
+  if (!state.arch) return esc(u("archPick"));
+  const it = ARCH.flatMap(l => l.items).find(i => i.k === state.arch);
+  return `<strong>${esc(t(it.name))}</strong><br>${esc(u("role"))}: ${esc(t(it.role))}<br>${esc(u("authority"))}: ${esc(t(it.auth))}<br>${esc(u("evidence"))}: ${esc(t(evOf(it)))}`;
+}
+function evOf(it){ return state.ver === "A" && it.evA ? it.evA : it.ev; }
+
+/* ===== EVENTS / REVIEW LOGIC ===== */
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  if (b.dataset.lang) { state.lang = b.dataset.lang; render(); announce(""); }
+  else if (b.dataset.ver) { state.ver = b.dataset.ver; if (state.ver==="A" && ["call","core"].includes(state.arch)) state.arch = null; render(); announce(`${u("viewing")} ${state.ver==="A"?u("aonly"):u("ab")}`); }
+  else if (b.dataset.arch) {
+    state.arch = b.dataset.arch;
+    document.querySelectorAll("[data-arch]").forEach(x => x.setAttribute("aria-pressed", x.dataset.arch === state.arch));
+    document.getElementById("archdetail").innerHTML = archDetail();
+  }
+  else if (b.id === "btn-reset") {
+    state.sys = "all"; state.ticks.clear(); state.arch = null; state.ver = "AB";
+    render(); announce(u("resetDone"));
+  }
+  else if (b.id === "btn-print") { window.print(); }
+});
+document.getElementById("sysfilter").addEventListener("change", e => {
+  state.sys = e.target.value; render();
+  announce(u("showing").replace("{n}", visibleEvents().length).replace("{t}", EVENTS.filter(x => state.ver==="AB" || x.set==="A").length));
+});
+document.addEventListener("change", e => {
+  const id = e.target.dataset && e.target.dataset.sim;
+  if (!id) return;
+  e.target.checked ? state.ticks.add(id) : state.ticks.delete(id);
+  document.getElementById("simcount").textContent = u("simTicked").replace("{n}", state.ticks.size);
+});
+function announce(msg){ document.getElementById("live").textContent = msg; }
+
+render();
+</script>
+</body>
+</html>
